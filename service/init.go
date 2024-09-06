@@ -12,10 +12,12 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/antihax/optional"
 	"github.com/omec-project/ausf/callback"
 	"github.com/omec-project/ausf/consumer"
 	"github.com/omec-project/ausf/context"
@@ -26,6 +28,7 @@ import (
 	"github.com/omec-project/ausf/util"
 	"github.com/omec-project/config5g/proto/client"
 	protos "github.com/omec-project/config5g/proto/sdcoreConfig"
+	"github.com/omec-project/openapi/Nnrf_NFDiscovery"
 	"github.com/omec-project/openapi/models"
 	nrfCache "github.com/omec-project/openapi/nrfcache"
 	"github.com/omec-project/util/http2_util"
@@ -415,22 +418,17 @@ func (ausf *AUSF) UpdateNF() {
 }
 
 func (ausf *AUSF) RegisterNF() {
-	for msg := range ConfigPodTrigger {
+	for {
+		msg := <-ConfigPodTrigger
 		if msg {
 			initLog.Infof("Minimum configuration from config pod available %v", msg)
-			self := context.GetSelf()
-			profile, err := consumer.BuildNFInstance(self)
-			if err != nil {
-				initLog.Error("Build AUSF Profile Error")
-			}
-			var prof models.NfProfile
-			prof, _, self.NfId, err = consumer.SendRegisterNFInstance(self.NrfUri, self.NfId, profile)
+			profile, err := ausf.BuildAndSendRegisterNFInstance()
 			if err != nil {
 				initLog.Errorf("AUSF register to NRF Error[%s]", err.Error())
 			} else {
-				//stop keepAliveTimer if its running
-				ausf.StartKeepAliveTimer(prof)
-				logger.CfgLog.Infof("Sent Register NF Instance with updated profile")
+				ausf.StartKeepAliveTimer(profile)
+				// NRF Registration Successful, Trigger for Udm Discovery
+				ausf.DiscoverUdm()
 			}
 		} else {
 			// stopping keepAlive timer
@@ -448,5 +446,26 @@ func (ausf *AUSF) RegisterNF() {
 				logger.InitLog.Infof("Deregister from NRF successfully")
 			}
 		}
+	}
+}
+
+func (ausf *AUSF) DiscoverUdm() {
+	self := context.GetSelf()
+	nfDiscoverParam := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
+		ServiceNames: optional.NewInterface([]models.ServiceName{models.ServiceName_NUDM_UEAU}),
+	}
+	res, err := consumer.SendSearchNFInstances(self.NrfUri, models.NfType_UDM, models.NfType_AUSF, &nfDiscoverParam)
+	if err != nil {
+		logger.UeAuthPostLog.Errorln("[Search UDM UEAU] ", err.Error())
+	} else if len(res.NfInstances) > 0 {
+		udmInstance := res.NfInstances[0]
+		if len(udmInstance.Ipv4Addresses) > 0 && udmInstance.NfServices != nil {
+			ueauService := (*udmInstance.NfServices)[0]
+			ueauEndPoint := (*ueauService.IpEndPoints)[0]
+			udmUrl := string(ueauService.Scheme) + "://" + ueauEndPoint.Ipv4Address + ":" + strconv.Itoa(int(ueauEndPoint.Port))
+			self.UdmUeauUrl = udmUrl
+		}
+	} else {
+		logger.UeAuthPostLog.Errorln("[Search UDM UEAU] len(NfInstances) = 0")
 	}
 }
