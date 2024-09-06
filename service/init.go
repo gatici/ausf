@@ -449,6 +449,7 @@ func (ausf *AUSF) RegisterNF() {
 	}
 }
 
+// DiscoverUdm
 func (ausf *AUSF) DiscoverUdm() {
 	self := context.GetSelf()
 	nfDiscoverParam := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
