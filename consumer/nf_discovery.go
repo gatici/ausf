@@ -20,7 +20,6 @@ import (
 var (
 	CreateSubscription        = SendCreateSubscription
 	NRFCacheSearchNFInstances = nrfCache.SearchNFInstances
-	StoreApiClient            = &Nnrf_NFDiscovery.APIClient{}
 	StoreApiSearchNFInstances = (*Nnrf_NFDiscovery.NFInstancesStoreApiService).SearchNFInstances
 )
 

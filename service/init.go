@@ -415,38 +415,21 @@ func (ausf *AUSF) UpdateNF() {
 }
 
 func (ausf *AUSF) RegisterNF() {
+	self := context.GetSelf()
 	for msg := range ConfigPodTrigger {
-		if msg {
-			initLog.Infof("Minimum configuration from config pod available %v", msg)
-			self := context.GetSelf()
-			profile, err := consumer.BuildNFInstance(self)
-			if err != nil {
-				initLog.Error("Build AUSF Profile Error")
-			}
-			var prof models.NfProfile
-			prof, _, self.NfId, err = consumer.SendRegisterNFInstance(self.NrfUri, self.NfId, profile)
-			if err != nil {
-				initLog.Errorf("AUSF register to NRF Error[%s]", err.Error())
-			} else {
-				//stop keepAliveTimer if its running
-				ausf.StartKeepAliveTimer(prof)
-				logger.CfgLog.Infof("Sent Register NF Instance with updated profile")
-			}
+		initLog.Infof("Minimum configuration from config pod available %v", msg)
+		profile, err := consumer.BuildNFInstance(self)
+		if err != nil {
+			initLog.Error("Build AUSF Profile Error")
+		}
+		var prof models.NfProfile
+		prof, _, self.NfId, err = consumer.SendRegisterNFInstance(self.NrfUri, self.NfId, profile)
+		if err != nil {
+			initLog.Errorf("AUSF register to NRF Error[%s]", err.Error())
 		} else {
-			// stopping keepAlive timer
-			KeepAliveTimerMutex.Lock()
-			ausf.StopKeepAliveTimer()
-			KeepAliveTimerMutex.Unlock()
-			initLog.Infof("AUSF is not having Minimum Config to Register/Update to NRF")
-			problemDetails, err := consumer.SendDeregisterNFInstance()
-			if problemDetails != nil {
-				initLog.Errorf("AUSF Deregister Instance to NRF failed, Problem: [+%v]", problemDetails)
-			}
-			if err != nil {
-				initLog.Errorf("AUSF Deregister Instance to NRF Error[%s]", err.Error())
-			} else {
-				logger.InitLog.Infof("Deregister from NRF successfully")
-			}
+			//stop keepAliveTimer if its running
+			ausf.StartKeepAliveTimer(prof)
+			logger.CfgLog.Infof("Sent Register NF Instance with updated profile")
 		}
 	}
 }
